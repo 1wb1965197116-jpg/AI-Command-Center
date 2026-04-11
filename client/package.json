@@ -1,4 +1,6 @@
 {
+  "homepage": "."
+}
   "name": "client",
   "private": true,
   "dependencies": {
