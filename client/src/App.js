@@ -10,21 +10,21 @@ export default function App() {
 
     setLoading(true);
 
-    const res = await fetch("https://ai-command-center-iq8w.onrender.com/api/ask", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ prompt })
-    });
+    try {
+      const res = await fetch("https://ai-command-center-iq8w.onrender.com/api/ask", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ prompt })
+      });
 
-    const data = await response.json();
+      const data = await res.json();
 
-console.log("OPENAI RESPONSE:", JSON.stringify(data, null, 2));
+      setChat([{ prompt, reply: data.reply }, ...chat]);
 
-if (!data.choices) {
-  return res.json({ reply: "Error: " + JSON.stringify(data) });
-}
+    } catch (err) {
+      setChat([{ prompt, reply: "Error: " + err.message }, ...chat]);
+    }
 
-    setChat([{ prompt, reply: data.reply }, ...chat]);
     setPrompt("");
     setLoading(false);
   };
