@@ -237,3 +237,29 @@ const deployProject = async () => {
 
   setReply("🚀 Repo Created:\n" + data.repo);
 };
+const fullDeploy = async () => {
+  const res = await fetch(API + "/api/full-deploy", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      projectName: "ai-app-" + Date.now(),
+      files: [
+        {
+          path: "index.html",
+          content: htmlCode || "<h1>Hello AI App</h1>"
+        },
+        {
+          path: "server.js",
+          content: "console.log('Server running')"
+        }
+      ]
+    })
+  });
+
+  const data = await res.json();
+
+  setReply(
+    "🚀 DEPLOYED:\n\nGitHub:\n" + data.repo +
+    "\n\nRender:\n" + data.render
+  );
+};
