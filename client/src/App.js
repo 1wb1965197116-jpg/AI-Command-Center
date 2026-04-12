@@ -2,14 +2,9 @@ import React, { useState } from "react";
 
 export default function App() {
   const [prompt, setPrompt] = useState("");
-  const [chat, setChat] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [reply, setReply] = useState("");
 
   const send = async () => {
-    if (!prompt) return;
-
-    setLoading(true);
-
     try {
       const res = await fetch("https://ai-command-center-iq8w.onrender.com/api/ask", {
         method: "POST",
@@ -18,42 +13,26 @@ export default function App() {
       });
 
       const data = await res.json();
-
-      setChat([{ prompt, reply: data.reply }, ...chat]);
+      setReply(data.reply);
 
     } catch (err) {
-      setChat([{ prompt, reply: "Error: " + err.message }, ...chat]);
+      setReply("Error: " + err.message);
     }
-
-    setPrompt("");
-    setLoading(false);
   };
 
   return (
-    <div style={{background:"#000", color:"#0f0", padding:20}}>
+    <div style={{ padding: 20 }}>
       <h1>AI Command Center</h1>
 
-      <textarea
+      <input
         value={prompt}
         onChange={e => setPrompt(e.target.value)}
-        placeholder="Ask AI anything..."
+        placeholder="Ask something..."
       />
-
-      <br/>
 
       <button onClick={send}>Send</button>
 
-      {loading && <p>Thinking...</p>}
-
-      <hr/>
-
-      {chat.map((c,i)=>(
-        <div key={i}>
-          <b>YOU:</b> {c.prompt}<br/>
-          <b>AI:</b> {c.reply}
-          <hr/>
-        </div>
-      ))}
+      <p><b>AI:</b> {reply}</p>
     </div>
   );
 }
