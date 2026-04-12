@@ -223,3 +223,17 @@ export default function App() {
     </div>
   );
 }
+const deployProject = async () => {
+  const res = await fetch(API + "/api/deploy", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      projectName: "ai-generated-app",
+      files: htmlCode || "<h1>Hello from AI</h1>"
+    })
+  });
+
+  const data = await res.json();
+
+  setReply("🚀 Repo Created:\n" + data.repo);
+};
