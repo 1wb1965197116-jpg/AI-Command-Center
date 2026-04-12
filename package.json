@@ -1,7 +1,7 @@
 {
   "name": "ai-command-center",
   "private": true,
-  "type": "module",
+  
   "scripts": {
     "build": "cd server && npm install && cd ../client && npm install && npm run build",
     "start": "node server/server.js"
