@@ -16,7 +16,13 @@ export default function App() {
       body: JSON.stringify({ prompt })
     });
 
-    const data = await res.json();
+    const data = await response.json();
+
+console.log("OPENAI RESPONSE:", JSON.stringify(data, null, 2));
+
+if (!data.choices) {
+  return res.json({ reply: "Error: " + JSON.stringify(data) });
+}
 
     setChat([{ prompt, reply: data.reply }, ...chat]);
     setPrompt("");
