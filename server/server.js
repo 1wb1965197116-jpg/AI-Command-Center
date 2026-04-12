@@ -9,12 +9,11 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// Fix __dirname (important for Render)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // =====================
-// 💾 SIMPLE DATABASE
+// DB
 // =====================
 const DB_FILE = path.join(__dirname, "db.json");
 
@@ -29,7 +28,14 @@ function saveChat(prompt, reply) {
 }
 
 // =====================
-// 📜 HISTORY
+// HEALTH
+// =====================
+app.get("/api/health", (req, res) => {
+  res.json({ status: "AI Server Running" });
+});
+
+// =====================
+// HISTORY
 // =====================
 app.get("/api/history", (req, res) => {
   const data = JSON.parse(fs.readFileSync(DB_FILE));
@@ -37,40 +43,11 @@ app.get("/api/history", (req, res) => {
 });
 
 // =====================
-// 🤖 AI CHAT
+// AI CHAT (FIXED)
 // =====================
 app.post("/api/ask", async (req, res) => {
-  const { prompt, model } = req.body;
+  const { prompt } = req.body;
 
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: model || "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
-
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || "No response";
-
-    saveChat(prompt, reply);
-
-    res.json({ reply });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// =====================
-// 🖼 IMAGE AI
-// =====================
-app.post("/api/image", async (req, res) => {
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -80,74 +57,32 @@ app.post("/api/image", async (req, res) => {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        messages: [
-          { role: "user", content: "Analyze this image in detail." }
-        ]
-      })
-    });
-
-    const data = await response.json();
-    res.json({ reply: data.choices?.[0]?.message?.content });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// =====================
-// 💼 BUSINESS AI
-// =====================
-app.post("/api/business", async (req, res) => {
-  const { revenue, expenses } = req.body;
-
-  const prompt = `
-Analyze this business:
-Revenue: ${revenue}
-Expenses: ${expenses}
-Give profit insights and strategy.
-`;
-
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
         messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
-    res.json({ reply: data.choices?.[0]?.message?.content });
+
+    console.log("OPENAI RESPONSE:", data);
+
+    if (!data.choices) {
+      return res.json({ reply: "Error: " + JSON.stringify(data) });
+    }
+
+    const reply = data.choices[0].message.content;
+
+    saveChat(prompt, reply);
+
+    res.json({ reply });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.json({ reply: "Server error: " + err.message });
   }
 });
 
 // =====================
-// ❤️ HEALTH CHECK
-// =====================
-app.get("/api/health", (req, res) => {
-  res.json({ status: "AI Server Running" });
-});
-
-// =====================
-// 🌐 FRONTEND FIX (IMPORTANT)
-// =====================
-const buildPath = path.join(__dirname, "../client/build");
-
-app.use(express.static(buildPath));
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(buildPath, "index.html"));
-});
-
-// =====================
-// 🚀 START SERVER
+// START SERVER
 // =====================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("AI Server running on port", PORT));
+app.listen(PORT, () => console.log("Server running on port", PORT));
