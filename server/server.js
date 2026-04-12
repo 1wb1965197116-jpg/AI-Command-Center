@@ -175,3 +175,57 @@ app.post("/api/image", async (req, res) => {
 // =====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server running on port", PORT));
+app.post("/api/deploy", async (req, res) => {
+  const { projectName, files } = req.body;
+
+  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
+  if (!GITHUB_TOKEN) {
+    return res.json({ error: "Missing GitHub token" });
+  }
+
+  try {
+    // 1️⃣ Create repo
+    const repoRes = await fetch("https://api.github.com/user/repos", {
+      method: "POST",
+      headers: {
+        "Authorization": "token " + GITHUB_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: projectName,
+        private: false
+      })
+    });
+
+    const repoData = await repoRes.json();
+
+    const repoUrl = repoData.clone_url;
+
+    // 2️⃣ Push files (basic single file demo)
+    const fileRes = await fetch(
+      `https://api.github.com/repos/${repoData.full_name}/contents/index.html`,
+      {
+        method: "PUT",
+        headers: {
+          "Authorization": "token " + GITHUB_TOKEN,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: "initial commit",
+          content: Buffer.from(files).toString("base64")
+        })
+      }
+    );
+
+    await fileRes.json();
+
+    res.json({
+      status: "DEPLOYED",
+      repo: repoUrl
+    });
+
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
