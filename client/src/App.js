@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 export default function App() {
+  const [apiKey, setApiKey] = useState("");
   const [prompt, setPrompt] = useState("");
   const [reply, setReply] = useState("");
 
@@ -8,7 +9,10 @@ export default function App() {
     try {
       const res = await fetch("https://ai-command-center-iq8w.onrender.com/api/ask", {
         method: "POST",
-        headers: {"Content-Type":"application/json"},
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey   // 🔥 send key manually
+        },
         body: JSON.stringify({ prompt })
       });
 
@@ -25,9 +29,17 @@ export default function App() {
       <h1>AI Command Center</h1>
 
       <input
+        placeholder="Enter OpenAI API Key"
+        value={apiKey}
+        onChange={e => setApiKey(e.target.value)}
+        style={{ width: "100%", marginBottom: 10 }}
+      />
+
+      <input
         value={prompt}
         onChange={e => setPrompt(e.target.value)}
         placeholder="Ask something..."
+        style={{ width: "100%", marginBottom: 10 }}
       />
 
       <button onClick={send}>Send</button>
