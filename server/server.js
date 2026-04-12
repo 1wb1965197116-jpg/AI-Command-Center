@@ -13,12 +13,11 @@ app.use(express.json({ limit: "10mb" }));
 // 🔐 CONFIG
 // =====================
 const PIN = "20252025";
-const SECRET = "my_super_secret_key"; // change if you want
-
+const SECRET = "my_super_secret_key";
 const KEY_FILE = path.join(__dirname, "secure_key.json");
 
 // =====================
-// 🔐 ENCRYPT / DECRYPT
+// 🔐 ENCRYPTION
 // =====================
 function encrypt(text) {
   const cipher = crypto.createCipher("aes-256-ctr", SECRET);
@@ -31,7 +30,7 @@ function decrypt(hash) {
 }
 
 // =====================
-// 🔐 SAVE KEY (PIN PROTECTED)
+// 🔐 SAVE KEY
 // =====================
 app.post("/api/save-key", (req, res) => {
   const { apiKey, pin } = req.body;
@@ -61,16 +60,12 @@ function getSavedKey() {
 }
 
 // =====================
-// 🚫 BASIC ANTI-SCRAPE
+// 🚫 BASIC BOT BLOCK
 // =====================
 app.use((req, res, next) => {
   const ua = req.headers["user-agent"] || "";
 
-  if (
-    ua.includes("curl") ||
-    ua.includes("bot") ||
-    ua.includes("spider")
-  ) {
+  if (ua.includes("curl") || ua.includes("bot")) {
     return res.status(403).send("Blocked");
   }
 
@@ -85,22 +80,21 @@ app.get("/", (req, res) => {
 });
 
 // =====================
-// 🤖 AI CHAT
+// 🤖 CHAT (DEMO + LIVE)
 // =====================
 app.post("/api/ask", async (req, res) => {
   const { prompt } = req.body;
 
-  // Priority:
-  // 1. Header key
-  // 2. Saved key
-  // 3. Env key
   const apiKey =
     req.headers["x-api-key"] ||
     getSavedKey() ||
     process.env.OPENAI_API_KEY;
 
+  // 🧪 DEMO MODE
   if (!apiKey) {
-    return res.json({ reply: "No API key found" });
+    return res.json({
+      reply: "🧪 Demo Mode: AI would respond to → " + prompt
+    });
   }
 
   try {
@@ -126,6 +120,53 @@ app.post("/api/ask", async (req, res) => {
 
   } catch (err) {
     res.json({ reply: "Server error: " + err.message });
+  }
+});
+
+// =====================
+// 🖼 IMAGE AI (DEMO + LIVE)
+// =====================
+app.post("/api/image", async (req, res) => {
+  const { image } = req.body;
+
+  const apiKey =
+    req.headers["x-api-key"] ||
+    getSavedKey() ||
+    process.env.OPENAI_API_KEY;
+
+  // 🧪 DEMO MODE
+  if (!apiKey) {
+    return res.json({
+      reply: "🧪 Demo Mode: Image received and would be analyzed."
+    });
+  }
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: "Analyze this image in detail."
+          }
+        ]
+      })
+    });
+
+    const data = await response.json();
+
+    res.json({
+      reply: data.choices?.[0]?.message?.content || "No response"
+    });
+
+  } catch (err) {
+    res.json({ reply: "Image error: " + err.message });
   }
 });
 
