@@ -1,43 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
 export default function App() {
-  const [apiKey, setApiKey] = useState("");
-  const [pin, setPin] = useState("");
-  const [locked, setLocked] = useState(false);
-  const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState("chat");
+  const [input, setInput] = useState("");
   const [reply, setReply] = useState("");
 
-  useEffect(() => {
-    if (localStorage.getItem("locked") === "true") {
-      setLocked(true);
-    }
-  }, []);
-
-  const execute = async () => {
-    const res = await fetch("https://ai-command-center-iq8w.onrender.com/api/save-key", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ apiKey, pin })
-    });
-
-    const data = await res.json();
-
-    if (data.status === "KEY SAVED") {
-      localStorage.setItem("locked", "true");
-      setLocked(true);
-      setApiKey("");
-      setPin("");
-    } else {
-      alert("Wrong PIN");
-    }
-  };
-
-  // 🤖 CHAT
   const send = async () => {
     const res = await fetch("https://ai-command-center-iq8w.onrender.com/api/ask", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({ prompt: input })
     });
 
     const data = await res.json();
@@ -47,11 +19,11 @@ export default function App() {
   // 🎤 VOICE
   const voice = () => {
     const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    rec.onresult = e => setPrompt(e.results[0][0].transcript);
+    rec.onresult = e => setInput(e.results[0][0].transcript);
     rec.start();
   };
 
-  // 🖼 IMAGE
+  // 🖼 IMAGE UPLOAD
   const uploadImage = (e) => {
     const file = e.target.files[0];
     const reader = new FileReader();
@@ -70,38 +42,46 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  const reset = () => {
-    localStorage.removeItem("locked");
-    setLocked(false);
-  };
-
   return (
     <div style={{ padding: 20 }}>
+
       <h1>AI Command Center</h1>
 
-      {!locked && (
-        <>
-          <input placeholder="API Key" value={apiKey} onChange={e => setApiKey(e.target.value)} />
-          <input placeholder="PIN" value={pin} onChange={e => setPin(e.target.value)} />
-          <button onClick={execute}>🔐 Execute</button>
-        </>
-      )}
-
-      {locked && <button onClick={reset}>➕ Add New Key</button>}
+      {/* MODE SWITCH */}
+      <div>
+        <button onClick={() => setMode("chat")}>💬 Chat</button>
+        <button onClick={() => setMode("code")}>💻 Code</button>
+        <button onClick={() => setMode("doc")}>📄 Document</button>
+      </div>
 
       <hr/>
 
-      <input
-        value={prompt}
-        onChange={e => setPrompt(e.target.value)}
-        placeholder="Ask AI..."
+      {/* INPUT AREA */}
+      <textarea
+        rows="10"
+        style={{ width: "100%" }}
+        placeholder={
+          mode === "chat" ? "Ask anything..." :
+          mode === "code" ? "Paste code here..." :
+          "Paste document text here..."
+        }
+        value={input}
+        onChange={e => setInput(e.target.value)}
       />
+
+      <br/>
 
       <button onClick={send}>Send</button>
       <button onClick={voice}>🎤 Voice</button>
       <input type="file" onChange={uploadImage} />
 
-      <p><b>AI:</b> {reply}</p>
+      <hr/>
+
+      <h3>AI Response:</h3>
+      <div style={{ whiteSpace: "pre-wrap", background: "#eee", padding: 10 }}>
+        {reply}
+      </div>
+
     </div>
   );
 }
