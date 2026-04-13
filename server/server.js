@@ -6,25 +6,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// HEALTH
+// =====================
+// ❤️ HEALTH
+// =====================
 app.get("/", (req, res) => {
   res.send("AI Command Center API Running 🚀");
 });
 
-// CHAT
+// =====================
+// 🤖 AI CHAT
+// =====================
 app.post("/api/ask", async (req, res) => {
   const { prompt } = req.body;
-
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
     return res.json({
-      reply: "🧪 Demo Mode: AI would respond to → " + prompt
+      reply: "🧪 Demo Mode → " + prompt
     });
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + apiKey,
@@ -36,21 +39,82 @@ app.post("/api/ask", async (req, res) => {
       })
     });
 
-    const data = await response.json();
-    res.json({ reply: data.choices?.[0]?.message?.content });
+    const d = await r.json();
+    res.json({ reply: d.choices?.[0]?.message?.content });
 
-  } catch (err) {
-    res.json({ reply: "Error: " + err.message });
+  } catch (e) {
+    res.json({ reply: "Error: " + e.message });
   }
 });
 
-// FULL DEPLOY
+// =====================
+// 🤖 FULL APP BUILDER (NEW)
+// =====================
+app.post("/api/build-full-app", async (req, res) => {
+  const { idea } = req.body;
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return res.json({
+      files: [
+        { path: "index.html", content: "<h1>Demo App</h1>" }
+      ]
+    });
+  }
+
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{
+          role: "user",
+          content:
+`Create a FULL deployable web app.
+
+Return JSON like:
+[
+ { "path": "index.html", "content": "..." },
+ { "path": "style.css", "content": "..." },
+ { "path": "script.js", "content": "..." }
+]
+
+APP IDEA:
+${idea}`
+        }]
+      })
+    });
+
+    const d = await r.json();
+    let files;
+
+    try {
+      files = JSON.parse(d.choices[0].message.content);
+    } catch {
+      files = [
+        { path: "index.html", content: d.choices[0].message.content }
+      ];
+    }
+
+    res.json({ files });
+
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
+// =====================
+// 🚀 DEPLOY (GITHUB + RENDER READY)
+// =====================
 app.post("/api/full-deploy", async (req, res) => {
   const { projectName, files } = req.body;
+  const token = process.env.GITHUB_TOKEN;
 
-  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-
-  if (!GITHUB_TOKEN) {
+  if (!token) {
     return res.json({ error: "Missing GitHub token" });
   }
 
@@ -58,44 +122,39 @@ app.post("/api/full-deploy", async (req, res) => {
     const repoRes = await fetch("https://api.github.com/user/repos", {
       method: "POST",
       headers: {
-        "Authorization": "token " + GITHUB_TOKEN,
+        Authorization: "token " + token,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        name: projectName,
-        private: false
-      })
+      body: JSON.stringify({ name: projectName })
     });
 
-    const repoData = await repoRes.json();
+    const repo = await repoRes.json();
 
-    for (const file of files) {
+    for (const f of files) {
       await fetch(
-        `https://api.github.com/repos/${repoData.full_name}/contents/${file.path}`,
+        `https://api.github.com/repos/${repo.full_name}/contents/${f.path}`,
         {
           method: "PUT",
           headers: {
-            "Authorization": "token " + GITHUB_TOKEN,
+            Authorization: "token " + token,
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            message: "AI commit",
-            content: Buffer.from(file.content).toString("base64")
+            message: "AI deploy",
+            content: Buffer.from(f.content).toString("base64")
           })
         }
       );
     }
 
     res.json({
-      status: "DEPLOYED",
-      repo: repoData.html_url
+      repo: repo.html_url,
+      render: "Connect repo to Render for auto deploy"
     });
 
-  } catch (err) {
-    res.json({ error: err.message });
+  } catch (e) {
+    res.json({ error: e.message });
   }
 });
 
-// START
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on port", PORT));
+app.listen(process.env.PORT || 3000);
