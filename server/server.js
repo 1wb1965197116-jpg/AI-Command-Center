@@ -1,17 +1,82 @@
+const express = require("express");
+const fetch = require("node-fetch");
+const cors = require("cors");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// =====================
+// ❤️ HEALTH CHECK
+// =====================
+app.get("/", (req, res) => {
+  res.send("AI Command Center API Running 🚀");
+});
+
+// =====================
+// 🤖 BASIC CHAT (DEMO + LIVE)
+// =====================
+app.post("/api/ask", async (req, res) => {
+  const { prompt } = req.body;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return res.json({
+      reply: "🧪 Demo Mode: AI would respond to → " + prompt
+    });
+  }
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    res.json({ reply: data.choices?.[0]?.message?.content });
+
+  } catch (err) {
+    res.json({ reply: "Error: " + err.message });
+  }
+});
+
+// =====================
+// 🖼 IMAGE AI
+// =====================
+app.post("/api/image", async (req, res) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return res.json({
+      reply: "🧪 Demo Mode: Image received"
+    });
+  }
+
+  res.json({ reply: "Image processing ready (connect model later)" });
+});
+
+// =====================
+// 🚀 FULL AUTO DEPLOY
+// =====================
 app.post("/api/full-deploy", async (req, res) => {
   const { projectName, files } = req.body;
 
   const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-  const RENDER_API_KEY = process.env.RENDER_API_KEY;
 
   if (!GITHUB_TOKEN) {
     return res.json({ error: "Missing GitHub token" });
   }
 
   try {
-    // =========================
-    // 1️⃣ CREATE GITHUB REPO
-    // =========================
+    // CREATE REPO
     const repoRes = await fetch("https://api.github.com/user/repos", {
       method: "POST",
       headers: {
@@ -26,13 +91,7 @@ app.post("/api/full-deploy", async (req, res) => {
 
     const repoData = await repoRes.json();
 
-    if (!repoData.full_name) {
-      return res.json({ error: "GitHub repo creation failed", details: repoData });
-    }
-
-    // =========================
-    // 2️⃣ PUSH MULTIPLE FILES
-    // =========================
+    // PUSH FILES
     for (const file of files) {
       await fetch(
         `https://api.github.com/repos/${repoData.full_name}/contents/${file.path}`,
@@ -43,46 +102,25 @@ app.post("/api/full-deploy", async (req, res) => {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            message: "AI initial commit",
+            message: "AI commit",
             content: Buffer.from(file.content).toString("base64")
           })
         }
       );
     }
 
-    // =========================
-    // 3️⃣ DEPLOY TO RENDER
-    // =========================
-    let renderUrl = "Render not connected";
-
-    if (RENDER_API_KEY) {
-      const renderRes = await fetch("https://api.render.com/v1/services", {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + RENDER_API_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          name: projectName,
-          type: "web_service",
-          repo: repoData.clone_url,
-          branch: "main",
-          buildCommand: "npm install",
-          startCommand: "node server.js"
-        })
-      });
-
-      const renderData = await renderRes.json();
-      renderUrl = renderData.service?.url || "Deploy started...";
-    }
-
     res.json({
-      status: "SUCCESS",
-      repo: repoData.html_url,
-      render: renderUrl
+      status: "DEPLOYED",
+      repo: repoData.html_url
     });
 
   } catch (err) {
     res.json({ error: err.message });
   }
 });
+
+// =====================
+// 🚀 START SERVER
+// =====================
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server running on port", PORT));
