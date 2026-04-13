@@ -1,20 +1,59 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 export default function App() {
-  const [mode, setMode] = useState("chat");
+  const API = "https://ai-command-center-iq8w.onrender.com";
+
+  const [apiKey, setApiKey] = useState("");
+  const [pin, setPin] = useState("");
+  const [locked, setLocked] = useState(false);
+
   const [input, setInput] = useState("");
   const [reply, setReply] = useState("");
   const [htmlCode, setHtmlCode] = useState("");
 
-  const API = "https://ai-command-center-iq8w.onrender.com";
+  // =====================
+  // 🔐 LOAD LOCK STATE
+  // =====================
+  useEffect(() => {
+    if (localStorage.getItem("locked") === "true") {
+      setLocked(true);
+    }
+  }, []);
 
   // =====================
-  // 🤖 BASIC CHAT
+  // 🔐 SAVE KEY
+  // =====================
+  const execute = async () => {
+    const res = await fetch(API + "/api/save-key", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ apiKey, pin })
+    });
+
+    const data = await res.json();
+
+    if (data.status === "KEY SAVED") {
+      localStorage.setItem("locked", "true");
+      setLocked(true);
+      setApiKey("");
+      setPin("");
+    } else {
+      alert("Wrong PIN");
+    }
+  };
+
+  const resetKey = () => {
+    localStorage.removeItem("locked");
+    setLocked(false);
+  };
+
+  // =====================
+  // 🤖 CHAT
   // =====================
   const send = async () => {
     const res = await fetch(API + "/api/ask", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ prompt: input })
     });
 
@@ -23,243 +62,113 @@ export default function App() {
   };
 
   // =====================
-  // 🎤 VOICE INPUT
+  // 🚀 AI BUILD PROJECT
   // =====================
-  const voice = () => {
-    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Speech) {
-      alert("Voice not supported on this device");
-      return;
-    }
-
-    const rec = new Speech();
-    rec.onresult = e => setInput(e.results[0][0].transcript);
-    rec.start();
-  };
-
-  // =====================
-  // 🖼 IMAGE UPLOAD
-  // =====================
-  const uploadImage = (e) => {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-
-    reader.onload = async () => {
-      const res = await fetch(API + "/api/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: reader.result })
-      });
-
-      const data = await res.json();
-      setReply(data.reply);
-    };
-
-    reader.readAsDataURL(file);
-  };
-
-  // =====================
-  // 📷 CAMERA SCANNER
-  // =====================
-  const openCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      video.play();
-
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      setTimeout(() => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-
-        const image = canvas.toDataURL("image/png");
-
-        fetch(API + "/api/image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image })
-        })
-          .then(res => res.json())
-          .then(data => setReply(data.reply));
-
-        stream.getTracks().forEach(track => track.stop());
-      }, 2000);
-    } catch (err) {
-      alert("Camera error: " + err.message);
-    }
-  };
-
-  // =====================
-  // 🤖 MULTI-AI
-  // =====================
-  const multiAI = async () => {
-    let results = [];
-
-    for (let i = 0; i < 2; i++) {
-      const res = await fetch(API + "/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: input })
-      });
-
-      const data = await res.json();
-      results.push("🤖 AI " + (i + 1) + ":\n" + data.reply);
-    }
-
-    setReply(results.join("\n\n----------------\n\n"));
-  };
-
-  // =====================
-  // 💰 MONEY MODE
-  // =====================
-  const moneyMode = async () => {
+  const buildApp = async () => {
     const res = await fetch(API + "/api/ask", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
-        prompt: "Create a step-by-step business plan to make money: " + input
+        prompt: "Generate a full working HTML app with styling and script based on: " + input
       })
     });
 
     const data = await res.json();
-    setReply("💰 MONEY PLAN:\n\n" + data.reply);
+
+    setHtmlCode(data.reply);
+    setReply("✅ App generated. Go to HTML tab.");
   };
 
   // =====================
-  // 🌐 OPEN WEBSITE
+  // 🚀 FULL DEPLOY
   // =====================
-  const openSite = () => {
-    const url = prompt("Enter URL (https://...)");
-    if (url) window.open(url, "_blank");
+  const deploy = async () => {
+    const res = await fetch(API + "/api/full-deploy", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        projectName: "ai-app-" + Date.now(),
+        files: [
+          { path: "index.html", content: htmlCode }
+        ]
+      })
+    });
+
+    const data = await res.json();
+
+    setReply(
+      "🚀 DEPLOYED:\n\nGitHub:\n" + data.repo +
+      "\n\n(Render auto optional)"
+    );
   };
 
   // =====================
-  // 🧠 HTML RUNNER (AI BROWSER)
+  // 🌐 RUN HTML
   // =====================
   const runHTML = () => {
-    const newWindow = window.open();
-    newWindow.document.open();
-    newWindow.document.write(htmlCode);
-    newWindow.document.close();
+    const win = window.open();
+    win.document.write(htmlCode);
+    win.document.close();
   };
 
-  // =====================
-  // UI
-  // =====================
   return (
     <div style={{ padding: 20 }}>
 
       <h1>AI Command Center</h1>
 
-      {/* MODE SWITCH */}
-      <div>
-        <button onClick={() => setMode("chat")}>💬 Chat</button>
-        <button onClick={() => setMode("code")}>💻 Code</button>
-        <button onClick={() => setMode("doc")}>📄 Document</button>
-        <button onClick={() => setMode("html")}>🌐 HTML</button>
-      </div>
+      {/* 🔐 API KEY BOX */}
+      {!locked && (
+        <>
+          <input
+            placeholder="Enter API Key"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+          />
+          <input
+            placeholder="Enter PIN"
+            value={pin}
+            onChange={e => setPin(e.target.value)}
+          />
+          <button onClick={execute}>🔐 Execute</button>
+        </>
+      )}
+
+      {locked && (
+        <button onClick={resetKey}>➕ Add New Key</button>
+      )}
 
       <hr />
 
-      {/* INPUT AREA */}
-      {mode !== "html" && (
-        <textarea
-          rows="10"
-          style={{ width: "100%" }}
-          placeholder="Enter text..."
-          value={input}
-          onChange={e => setInput(e.target.value)}
-        />
-      )}
-
-      {/* HTML RUNNER */}
-      {mode === "html" && (
-        <>
-          <textarea
-            rows="10"
-            style={{ width: "100%" }}
-            placeholder="<html>...</html>"
-            value={htmlCode}
-            onChange={e => setHtmlCode(e.target.value)}
-          />
-          <br />
-          <button onClick={runHTML}>🚀 Run HTML</button>
-        </>
-      )}
+      {/* INPUT */}
+      <textarea
+        rows="6"
+        style={{ width: "100%" }}
+        placeholder="Describe app or ask AI..."
+        value={input}
+        onChange={e => setInput(e.target.value)}
+      />
 
       <br />
 
-      {/* ACTION BUTTONS */}
-      {mode !== "html" && (
-        <>
-          <button onClick={send}>Send</button>
-          <button onClick={voice}>🎤 Voice</button>
-          <button onClick={multiAI}>🤖 Multi-AI</button>
-          <button onClick={moneyMode}>💰 Money</button>
-          <button onClick={openCamera}>📷 Scan</button>
-          <button onClick={openSite}>🌐 Open</button>
-          <input type="file" onChange={uploadImage} />
-        </>
-      )}
+      {/* ACTIONS */}
+      <button onClick={send}>💬 Chat</button>
+      <button onClick={buildApp}>🧠 Build App</button>
+      <button onClick={runHTML}>🌐 Run HTML</button>
+      <button onClick={deploy}>🚀 Deploy</button>
 
       <hr />
 
       {/* OUTPUT */}
-      <h3>AI Response:</h3>
-      <div style={{
-        whiteSpace: "pre-wrap",
-        background: "#eee",
-        padding: 10,
-        minHeight: 100
-      }}>
-        {reply}
-      </div>
+      <h3>AI Output</h3>
+      <textarea
+        rows="10"
+        style={{ width: "100%" }}
+        value={htmlCode}
+        onChange={e => setHtmlCode(e.target.value)}
+      />
+
+      <pre style={{ whiteSpace: "pre-wrap" }}>{reply}</pre>
 
     </div>
   );
 }
-const deployProject = async () => {
-  const res = await fetch(API + "/api/deploy", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      projectName: "ai-generated-app",
-      files: htmlCode || "<h1>Hello from AI</h1>"
-    })
-  });
-
-  const data = await res.json();
-
-  setReply("🚀 Repo Created:\n" + data.repo);
-};
-const fullDeploy = async () => {
-  const res = await fetch(API + "/api/full-deploy", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      projectName: "ai-app-" + Date.now(),
-      files: [
-        {
-          path: "index.html",
-          content: htmlCode || "<h1>Hello AI App</h1>"
-        },
-        {
-          path: "server.js",
-          content: "console.log('Server running')"
-        }
-      ]
-    })
-  });
-
-  const data = await res.json();
-
-  setReply(
-    "🚀 DEPLOYED:\n\nGitHub:\n" + data.repo +
-    "\n\nRender:\n" + data.render
-  );
-};
