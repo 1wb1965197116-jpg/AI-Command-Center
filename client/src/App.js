@@ -188,6 +188,10 @@ export default function App() {
 
       {/* 🔥 MAIN TOOLS */}
       <button onClick={send}>💬 Chat</button>
+      <button onClick={autoBuildDeploy}>
+       🤖 AUTO BUILD + DEPLOY
+        
+      </button>
       <button onClick={buildApp}>🧠 Build</button>
       <button onClick={runHTML}>🌐 Run</button>
       <button onClick={deploy}>🚀 Deploy</button>
