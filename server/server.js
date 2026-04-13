@@ -6,16 +6,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// =====================
-// ❤️ HEALTH CHECK
-// =====================
+// HEALTH
 app.get("/", (req, res) => {
   res.send("AI Command Center API Running 🚀");
 });
 
-// =====================
-// 🤖 BASIC CHAT (DEMO + LIVE)
-// =====================
+// CHAT
 app.post("/api/ask", async (req, res) => {
   const { prompt } = req.body;
 
@@ -48,24 +44,7 @@ app.post("/api/ask", async (req, res) => {
   }
 });
 
-// =====================
-// 🖼 IMAGE AI
-// =====================
-app.post("/api/image", async (req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    return res.json({
-      reply: "🧪 Demo Mode: Image received"
-    });
-  }
-
-  res.json({ reply: "Image processing ready (connect model later)" });
-});
-
-// =====================
-// 🚀 FULL AUTO DEPLOY
-// =====================
+// FULL DEPLOY
 app.post("/api/full-deploy", async (req, res) => {
   const { projectName, files } = req.body;
 
@@ -76,7 +55,6 @@ app.post("/api/full-deploy", async (req, res) => {
   }
 
   try {
-    // CREATE REPO
     const repoRes = await fetch("https://api.github.com/user/repos", {
       method: "POST",
       headers: {
@@ -91,7 +69,6 @@ app.post("/api/full-deploy", async (req, res) => {
 
     const repoData = await repoRes.json();
 
-    // PUSH FILES
     for (const file of files) {
       await fetch(
         `https://api.github.com/repos/${repoData.full_name}/contents/${file.path}`,
@@ -119,8 +96,6 @@ app.post("/api/full-deploy", async (req, res) => {
   }
 });
 
-// =====================
-// 🚀 START SERVER
-// =====================
+// START
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server running on port", PORT));
