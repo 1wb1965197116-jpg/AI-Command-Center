@@ -217,3 +217,32 @@ export default function App() {
     </div>
   );
 }
+const autoBuildDeploy = async () => {
+  setReply("🤖 Building app...");
+
+  const build = await fetch(API + "/api/build-full-app", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ idea: input })
+  });
+
+  const buildData = await build.json();
+
+  setReply("🚀 Deploying...");
+
+  const deploy = await fetch(API + "/api/full-deploy", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      projectName: "ai-auto-" + Date.now(),
+      files: buildData.files
+    })
+  });
+
+  const deployData = await deploy.json();
+
+  setReply(
+    "✅ FULL APP CREATED + DEPLOYED\n\n🐙 Repo:\n" +
+    deployData.repo
+  );
+};
