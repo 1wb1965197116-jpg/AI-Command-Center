@@ -11,10 +11,28 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(clientBuild));
 
+const requestBuckets = new Map();
+function rateLimit(maxRequests, windowMs) {
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip || req.socket.remoteAddress || "unknown";
+    let bucket = requestBuckets.get(key);
+    if (!bucket || now >= bucket.resetAt) {
+      bucket = { count: 0, resetAt: now + windowMs };
+    }
+    bucket.count += 1;
+    requestBuckets.set(key, bucket);
+    if (bucket.count > maxRequests) {
+      return res.status(429).json({ error: "Too many requests. Please wait and try again." });
+    }
+    next();
+  };
+}
+
 app.get("/health", (_req, res) => res.status(200).json({ ok: true, service: "ai-command-center" }));
 app.get("/", (_req, res) => res.sendFile(path.join(clientBuild, "index.html")));
 
-app.post("/api/ask", async (req, res) => {
+app.post("/api/ask", rateLimit(15, 15 * 60 * 1000), async (req, res) => {
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   if (!prompt) return res.status(400).json({ error: "A prompt is required" });
   if (prompt.length > 12000) return res.status(413).json({ error: "Prompt is too long" });
@@ -24,7 +42,7 @@ app.post("/api/ask", async (req, res) => {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", messages: [{ role: "user", content: prompt }] })
+      body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", max_tokens: 1200, messages: [{ role: "user", content: prompt }] })
     });
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: data?.error?.message || "AI provider request failed" });
@@ -35,7 +53,7 @@ app.post("/api/ask", async (req, res) => {
   }
 });
 
-app.post("/api/build-full-app", async (req, res) => {
+app.post("/api/build-full-app", rateLimit(5, 15 * 60 * 1000), async (req, res) => {
   const idea = typeof req.body?.idea === "string" ? req.body.idea.trim() : "";
   if (!idea) return res.status(400).json({ error: "Describe the app you want to build" });
   if (idea.length > 8000) return res.status(413).json({ error: "App description is too long" });
@@ -47,6 +65,7 @@ app.post("/api/build-full-app", async (req, res) => {
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        max_tokens: 4000,
         messages: [
           { role: "system", content: "Return only a JSON array of files. Each item must have path and content string fields. Do not include secrets, executable deployment scripts, or path traversal." },
           { role: "user", content: `Create a small deployable web app for this idea: ${idea}. Return files such as index.html, style.css, and script.js.` }
@@ -73,14 +92,14 @@ app.post("/api/build-full-app", async (req, res) => {
 function approved(req) {
   const expected = process.env.DEPLOY_APPROVAL_TOKEN || "";
   const supplied = req.get("x-deploy-approval") || "";
-  if (!expected || !supplied) return false;
+  if (expected.length < 32 || !supplied) return false;
   const a = Buffer.from(expected);
   const b = Buffer.from(supplied);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-app.post("/api/full-deploy", async (req, res) => {
-  if (!approved(req)) return res.status(403).json({ error: "A deployment approval token is required" });
+app.post("/api/full-deploy", rateLimit(3, 60 * 60 * 1000), async (req, res) => {
+  if (!approved(req)) return res.status(403).json({ error: "A deployment approval token (32+ characters) is required" });
   if (!process.env.GITHUB_TOKEN) return res.status(503).json({ error: "GITHUB_TOKEN is not configured on the server" });
   const projectName = typeof req.body?.projectName === "string" ? req.body.projectName : "";
   const files = req.body?.files;
