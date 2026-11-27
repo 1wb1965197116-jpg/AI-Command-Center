@@ -6,6 +6,7 @@ export default function App() {
   const [input, setInput] = useState("");
   const [reply, setReply] = useState("");
   const [htmlCode, setHtmlCode] = useState("");
+  const [previewHtml, setPreviewHtml] = useState("");
   const [files, setFiles] = useState([]);
   const [deployToken, setDeployToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,17 +69,12 @@ export default function App() {
     }
   };
 
-  const autoBuildDeploy = async () => {
-    await buildApp();
-  };
+  const autoBuildDeploy = async () => buildApp();
 
   const runHTML = () => {
     if (!htmlCode.trim()) return setReply("Build or paste HTML before running it.");
-    const win = window.open("", "_blank", "noopener,noreferrer");
-    if (!win) return setReply("Allow pop-ups to preview the generated app.");
-    win.document.open();
-    win.document.write(htmlCode);
-    win.document.close();
+    setPreviewHtml(htmlCode);
+    setReply("Preview rendered in a sandboxed frame. Scripts cannot access this dashboard.");
   };
 
   const handleFile = event => {
@@ -137,7 +133,7 @@ export default function App() {
   return (
     <main style={{ maxWidth: 900, margin: "24px auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
       <h1>AI Command Center</h1>
-      <p>Chat, generate app files, preview them, and deploy to a new private GitHub repository after approval.</p>
+      <p>Chat, generate app files, preview them safely, and deploy to a new private GitHub repository after approval.</p>
       <label htmlFor="prompt"><strong>Prompt or app description</strong></label>
       <textarea id="prompt" rows="6" style={{ width: "100%", marginTop: 8, padding: 10 }} value={input} onChange={e => setInput(e.target.value)} placeholder="Ask a question or describe the app you want to build..." />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "12px 0" }}>
@@ -153,6 +149,10 @@ export default function App() {
       <input ref={fileRef} type="file" accept=".txt,.md,.html,.css,.js,.json" hidden onChange={handleFile} />
       <label htmlFor="html-output"><strong>Generated HTML / output</strong></label>
       <textarea id="html-output" rows="12" style={{ width: "100%", marginTop: 8, padding: 10, fontFamily: "monospace" }} value={htmlCode} onChange={e => setHtmlCode(e.target.value)} />
+      {previewHtml && <section style={{ marginTop: 16 }}>
+        <h2>Sandboxed preview</h2>
+        <iframe title="Generated app preview" sandbox="allow-scripts" srcDoc={previewHtml} style={{ width: "100%", minHeight: 360, border: "1px solid #bbb", background: "white" }} />
+      </section>}
       <p>{files.length} generated file(s) available for deployment.</p>
       <label htmlFor="deploy-token"><strong>Deployment approval token</strong></label>
       <input id="deploy-token" type="password" autoComplete="off" value={deployToken} onChange={e => setDeployToken(e.target.value)} placeholder="Set DEPLOY_APPROVAL_TOKEN in Render first" style={{ width: "100%", padding: 10, marginTop: 8 }} />
