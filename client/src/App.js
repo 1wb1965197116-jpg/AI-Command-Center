@@ -1,252 +1,165 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useRef, useState } from "react";
+
+const API = "";
 
 export default function App() {
-  const API = "https://ai-command-center-iq8w.onrender.com";
-
-  const [apiKey, setApiKey] = useState("");
-  const [pin, setPin] = useState("");
-  const [locked, setLocked] = useState(false);
-
   const [input, setInput] = useState("");
   const [reply, setReply] = useState("");
   const [htmlCode, setHtmlCode] = useState("");
+  const [files, setFiles] = useState([]);
+  const [deployToken, setDeployToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
 
-  const fileRef = useRef();
-
-  // =====================
-  // 🔐 LOAD LOCK
-  // =====================
-  useEffect(() => {
-    if (localStorage.getItem("locked") === "true") {
-      setLocked(true);
-    }
-  }, []);
-
-  // =====================
-  // 🔐 SAVE KEY
-  // =====================
-  const execute = async () => {
-    const res = await fetch(API + "/api/save-key", {
+  const request = async (path, body, extraHeaders = {}) => {
+    const response = await fetch(API + path, {
       method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ apiKey, pin })
+      headers: { "Content-Type": "application/json", ...extraHeaders },
+      body: JSON.stringify(body)
     });
-
-    const data = await res.json();
-
-    if (data.status === "KEY SAVED") {
-      localStorage.setItem("locked", "true");
-      setLocked(true);
-      setApiKey("");
-      setPin("");
-    } else {
-      alert("Wrong PIN");
-    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+    return data;
   };
 
-  const resetKey = () => {
-    localStorage.removeItem("locked");
-    setLocked(false);
-  };
-
-  // =====================
-  // 🤖 CHAT
-  // =====================
   const send = async () => {
-    const res = await fetch(API + "/api/ask", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ prompt: input })
-    });
-
-    const data = await res.json();
-    setReply(data.reply);
+    if (!input.trim()) return setReply("Enter a prompt first.");
+    setBusy(true);
+    try {
+      const data = await request("/api/ask", { prompt: input });
+      setReply(data.reply || "No response returned.");
+    } catch (error) {
+      setReply(error.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // =====================
-  // 🧠 BUILD APP
-  // =====================
   const buildApp = async () => {
-    const res = await fetch(API + "/api/ask", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        prompt: "Generate full working HTML/CSS/JS app: " + input
-      })
-    });
-
-    const data = await res.json();
-    setHtmlCode(data.reply);
+    if (!input.trim()) return setReply("Describe the app you want to build first.");
+    setBusy(true);
+    try {
+      const data = await request("/api/build-full-app", { idea: input });
+      setFiles(data.files || []);
+      const html = (data.files || []).find(file => file.path === "index.html");
+      setHtmlCode(html?.content || JSON.stringify(data.files, null, 2));
+      setReply(`Generated ${data.files?.length || 0} file(s). Review them before deployment.`);
+    } catch (error) {
+      setReply(error.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // =====================
-  // 🚀 DEPLOY
-  // =====================
-  const deploy = async () => {
-    const res = await fetch(API + "/api/full-deploy", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
+  const deployFiles = async (items = files) => {
+    if (!deployToken.trim()) return setReply("Enter the deployment approval token configured in Render.");
+    if (!items.length) return setReply("Build an app before deploying.");
+    setBusy(true);
+    try {
+      const data = await request("/api/full-deploy", {
         projectName: "ai-app-" + Date.now(),
-        files: [
-          { path: "index.html", content: htmlCode }
-        ]
-      })
-    });
-
-    const data = await res.json();
-    setReply("🚀 Repo: " + data.repo);
+        files: items
+      }, { "x-deploy-approval": deployToken });
+      setReply(`GitHub repository created and files uploaded:\n${data.repo}`);
+    } catch (error) {
+      setReply(error.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // =====================
-  // 🌐 RUN HTML
-  // =====================
+  const autoBuildDeploy = async () => {
+    await buildApp();
+  };
+
   const runHTML = () => {
-    const win = window.open();
+    if (!htmlCode.trim()) return setReply("Build or paste HTML before running it.");
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) return setReply("Allow pop-ups to preview the generated app.");
+    win.document.open();
     win.document.write(htmlCode);
+    win.document.close();
   };
 
-  // =====================
-  // 📁 FILE UPLOAD
-  // =====================
-  const handleFile = (e) => {
-    const file = e.target.files[0];
+  const handleFile = event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
     const reader = new FileReader();
-
-    reader.onload = () => {
-      setInput(reader.result);
-    };
-
+    reader.onload = () => setInput(String(reader.result || ""));
+    reader.onerror = () => setReply("Could not read that file.");
     reader.readAsText(file);
+    event.target.value = "";
   };
 
-  // =====================
-  // 🌐 OPEN WEBSITE
-  // =====================
   const openSite = () => {
-    window.open(input.startsWith("http") ? input : "https://" + input);
+    const value = input.trim();
+    if (!value) return setReply("Enter a website address first.");
+    const url = /^https?:\/\//i.test(value) ? value : "https://" + value;
+    try {
+      const parsed = new URL(url);
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
+      window.open(parsed.href, "_blank", "noopener,noreferrer");
+    } catch {
+      setReply("Enter a valid website address.");
+    }
   };
 
-  // =====================
-  // 🎤 VOICE INPUT
-  // =====================
   const startVoice = () => {
-    const recognition = new window.webkitSpeechRecognition();
-    recognition.onresult = (e) => {
-      setInput(e.results[0][0].transcript);
-    };
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return setReply("Voice input is not supported by this browser.");
+    const recognition = new SpeechRecognition();
+    recognition.onresult = event => setInput(event.results[0][0].transcript);
+    recognition.onerror = () => setReply("Voice input could not start.");
     recognition.start();
   };
 
-  // =====================
-  // 📷 CAMERA SCAN
-  // =====================
   const startCamera = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.play();
-
-    const canvas = document.createElement("canvas");
-
-    setTimeout(() => {
-      canvas.getContext("2d").drawImage(video, 0, 0, 300, 200);
-      const img = canvas.toDataURL();
-      setReply("📷 Captured image (ready for AI processing)");
-      stream.getTracks().forEach(track => track.stop());
-    }, 3000);
+    if (!navigator.mediaDevices?.getUserMedia) return setReply("Camera access is not supported here.");
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      await video.play();
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+      setReply("Camera image captured locally. Image understanding is not connected yet.");
+    } catch (error) {
+      setReply("Camera capture failed: " + error.message);
+    } finally {
+      stream?.getTracks().forEach(track => track.stop());
+    }
   };
 
   return (
-    <div style={{ padding: 20 }}>
-
-      <h1>🤖 AI Command Center</h1>
-
-      {/* 🔐 KEY SYSTEM */}
-      {!locked ? (
-        <>
-          <input placeholder="API Key" value={apiKey} onChange={e=>setApiKey(e.target.value)} />
-          <input placeholder="PIN" value={pin} onChange={e=>setPin(e.target.value)} />
-          <button onClick={execute}>🔐 Execute</button>
-        </>
-      ) : (
-        <button onClick={resetKey}>➕ New Key</button>
-      )}
-
-      <hr />
-
-      {/* INPUT */}
-      <textarea
-        rows="5"
-        style={{ width: "100%" }}
-        value={input}
-        onChange={e=>setInput(e.target.value)}
-        placeholder="Ask AI or describe app..."
-      />
-
-      <br />
-
-      {/* 🔥 MAIN TOOLS */}
-      <button onClick={send}>💬 Chat</button>
-      <button onClick={autoBuildDeploy}>
-       🤖 AUTO BUILD + DEPLOY
-        
-      </button>
-      <button onClick={buildApp}>🧠 Build</button>
-      <button onClick={runHTML}>🌐 Run</button>
-      <button onClick={deploy}>🚀 Deploy</button>
-
-      <hr />
-
-      {/* 🧩 EXTRA TOOLS */}
-      <button onClick={()=>fileRef.current.click()}>📁 Upload</button>
-      <input type="file" ref={fileRef} style={{display:"none"}} onChange={handleFile} />
-
-      <button onClick={openSite}>🌐 Open Site</button>
-      <button onClick={startVoice}>🎤 Voice</button>
-      <button onClick={startCamera}>📷 Scan</button>
-
-      <hr />
-
-      {/* OUTPUT */}
-      <textarea
-        rows="10"
-        style={{ width: "100%" }}
-        value={htmlCode}
-        onChange={e=>setHtmlCode(e.target.value)}
-      />
-
-      <pre>{reply}</pre>
-
-    </div>
+    <main style={{ maxWidth: 900, margin: "24px auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
+      <h1>AI Command Center</h1>
+      <p>Chat, generate app files, preview them, and deploy to a new private GitHub repository after approval.</p>
+      <label htmlFor="prompt"><strong>Prompt or app description</strong></label>
+      <textarea id="prompt" rows="6" style={{ width: "100%", marginTop: 8, padding: 10 }} value={input} onChange={e => setInput(e.target.value)} placeholder="Ask a question or describe the app you want to build..." />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "12px 0" }}>
+        <button disabled={busy} onClick={send}>Chat</button>
+        <button disabled={busy} onClick={buildApp}>Build App</button>
+        <button disabled={busy} onClick={runHTML}>Preview HTML</button>
+        <button disabled={busy} onClick={autoBuildDeploy}>Generate Files</button>
+        <button onClick={() => fileRef.current?.click()}>Upload Text File</button>
+        <button onClick={openSite}>Open Website</button>
+        <button onClick={startVoice}>Voice Input</button>
+        <button onClick={startCamera}>Camera Capture</button>
+      </div>
+      <input ref={fileRef} type="file" accept=".txt,.md,.html,.css,.js,.json" hidden onChange={handleFile} />
+      <label htmlFor="html-output"><strong>Generated HTML / output</strong></label>
+      <textarea id="html-output" rows="12" style={{ width: "100%", marginTop: 8, padding: 10, fontFamily: "monospace" }} value={htmlCode} onChange={e => setHtmlCode(e.target.value)} />
+      <p>{files.length} generated file(s) available for deployment.</p>
+      <label htmlFor="deploy-token"><strong>Deployment approval token</strong></label>
+      <input id="deploy-token" type="password" autoComplete="off" value={deployToken} onChange={e => setDeployToken(e.target.value)} placeholder="Set DEPLOY_APPROVAL_TOKEN in Render first" style={{ width: "100%", padding: 10, marginTop: 8 }} />
+      <div style={{ margin: "12px 0" }}>
+        <button disabled={busy || !files.length} onClick={() => deployFiles()}>Deploy files to private GitHub repository</button>
+      </div>
+      <pre style={{ whiteSpace: "pre-wrap", background: "#f3f4f6", padding: 12, borderRadius: 8 }}>{busy ? "Working..." : reply}</pre>
+    </main>
   );
 }
-const autoBuildDeploy = async () => {
-  setReply("🤖 Building app...");
-
-  const build = await fetch(API + "/api/build-full-app", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ idea: input })
-  });
-
-  const buildData = await build.json();
-
-  setReply("🚀 Deploying...");
-
-  const deploy = await fetch(API + "/api/full-deploy", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      projectName: "ai-auto-" + Date.now(),
-      files: buildData.files
-    })
-  });
-
-  const deployData = await deploy.json();
-
-  setReply(
-    "✅ FULL APP CREATED + DEPLOYED\n\n🐙 Repo:\n" +
-    deployData.repo
-  );
-};
